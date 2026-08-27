@@ -1,18 +1,24 @@
 --!nonstrict
 -- [[panel]] entry: firing alerts rendered from the shared state published by
--- the fetch service. One card per alert: severity badge + name (click opens the
--- alert in Grafana), folder and start time, summary, then the label chips.
+-- the fetch service. Header badges filter by severity; one card per alert:
+-- severity badge + name (click opens the alert in Grafana), folder and start
+-- time, summary, label chips, then copy / silence actions.
 
 local MAX_ROWS = 100
+local AGE_REFRESH_MS = 30000 -- keep "x min ago" honest while the panel stays open
+local FAST_TICK_MS = 1000 -- while a confirmation or a "copied" hint is pending
+local CONFIRM_WINDOW_MS = 6000 -- second click on "silence" must happen within this
+local HINT_MS = 2000
 -- ui.row has no wrap: chips are chunked into rows by estimated width (panel is 720 wide).
 local CHIP_ROW_BUDGET = 620
 local CHIP_CHAR_WIDTH = 6.3 -- ≈ px per character at fontSize 11
 local CHIP_FIXED_WIDTH = 12 + 6 + 7 -- paddingH ×2, inner gaps, the "=" glyph
-local AGE_REFRESH_MS = 30000 -- keep "x min ago" honest while the panel stays open
 local CENTERED = { flexGrow = 1, align = "center", justify = "center", gap = 8 }
 -- Theme roles used until the service has published its colors.
 local FALLBACK_COLORS = { critical = "error", warning = "tertiary", info = "primary", other = "on_surface_variant" }
 local SEVERITY_GLYPHS = { critical = "alert-octagon", warning = "alert-triangle", info = "info-circle", other = "bell" }
+local SEVERITIES = { "critical", "warning", "info", "other" }
+local DEFAULT_SILENCE_MINUTES = 120
 
 local tr = noctalia.tr
 
@@ -22,7 +28,14 @@ local colors = nil
 local fetchStatus = "loading"
 local errorMessage = ""
 local lastUpdatedText = ""
+local silenceStatus = nil -- { nonce, id, status, message } from the service
 local isOpen = false
+
+local severityFilter = nil -- nil = all
+local pendingSilence = nil -- { id, untilMs }: first click done, waiting for the confirm click
+local copiedHint = nil -- { id, untilMs }
+local silenceNonce = (noctalia.state.get("silence_requested") or {}).nonce or 0
+local silencedIds = {} -- ids acknowledged by Grafana, shown as such until they leave the list
 
 local render
 
@@ -33,6 +46,10 @@ local function syncFromState()
   fetchStatus = noctalia.state.get("fetch_status") or "loading"
   errorMessage = noctalia.state.get("error_message") or ""
   lastUpdatedText = noctalia.state.get("last_updated_text") or ""
+  silenceStatus = noctalia.state.get("silence_status")
+  if type(silenceStatus) == "table" and silenceStatus.status == "ok" and silenceStatus.id then
+    silencedIds[silenceStatus.id] = true
+  end
 end
 
 local function severityColor(severity)
@@ -51,6 +68,48 @@ local function requestRefresh()
   noctalia.state.set("refresh_requested", (noctalia.state.get("refresh_requested") or 0) + 1)
 end
 
+local function requestSilence(id)
+  silenceNonce += 1
+  noctalia.state.set("silence_requested", { nonce = silenceNonce, id = id })
+end
+
+local function silenceMinutes()
+  return math.max(5, tonumber(noctalia.getConfig("silence_duration")) or DEFAULT_SILENCE_MINUTES)
+end
+
+local function durationText(minutes)
+  if minutes % 60 == 0 then
+    return tr("panel.duration.hours", { count = tostring(minutes // 60) })
+  end
+  return tr("panel.duration.minutes", { count = tostring(minutes) })
+end
+
+local function copyAlert(alert)
+  local lines = { alert.name }
+  if alert.folder ~= "" then
+    table.insert(lines, alert.folder)
+  end
+  if alert.summary ~= "" then
+    table.insert(lines, alert.summary)
+  end
+  if alert.description ~= "" and alert.description ~= alert.summary then
+    table.insert(lines, alert.description)
+  end
+  local keys = {}
+  for key in pairs(alert.labels or {}) do
+    if key:sub(1, 2) ~= "__" then
+      table.insert(keys, key)
+    end
+  end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    table.insert(lines, `{key}={alert.labels[key]}`)
+  end
+  table.insert(lines, alert.url)
+  noctalia.copyToClipboard(table.concat(lines, "\n"))
+  copiedHint = { id = alert.id, untilMs = noctalia.nowMs() + HINT_MS }
+end
+
 -- Theme roles take a "/alpha" suffix; hex colors get the alpha byte appended (#rrggbbaa).
 local function withAlpha(color, alpha)
   if color:sub(1, 1) ~= "#" then
@@ -66,16 +125,21 @@ local function withAlpha(color, alpha)
   return string.format("#%s%02x", hex, math.floor(alpha * 255 + 0.5))
 end
 
-local function badge(text, color, fillAlpha)
-  return ui.row({
-    fill = withAlpha(color, fillAlpha),
-    border = withAlpha(color, 0.24),
+-- opts: { key, onClick, active } — active badges get a stronger fill/border.
+local function badge(text, color, fillAlpha, opts)
+  opts = opts or {}
+  local props = {
+    key = opts.key,
+    fill = withAlpha(color, opts.active and math.min(1, fillAlpha * 2.5) or fillAlpha),
+    border = withAlpha(color, opts.active and 0.9 or 0.24),
     borderWidth = 1,
     radius = 8,
     paddingH = 7,
     paddingV = 2,
     align = "center",
-  }, {
+    onClick = opts.onClick,
+  }
+  return ui.row(props, {
     ui.label({ text = text, fontSize = 12, fontWeight = "medium", color = color }),
   })
 end
@@ -141,11 +205,76 @@ local function tagRows(tags)
   local rows = {}
   for index, chips in ipairs(lines) do
     -- The row measures its content a few px short and clips its last child;
-    -- a trailing filler label absorbs that shortfall instead of the last chip.
+    -- a trailing filler absorbs that shortfall instead of the last chip.
     table.insert(chips, ui.row({ key = "filler", minWidth = 24 }, { ui.label({ text = " " }) }))
     table.insert(rows, ui.row({ key = `tags:{index}`, gap = gap, align = "center" }, chips))
   end
   return rows
+end
+
+-- Copy + silence controls, plus the transient hints/errors that go with them.
+local function actionRow(alert)
+  local nowMs = noctalia.nowMs()
+  local items = {}
+
+  if copiedHint and copiedHint.id == alert.id and copiedHint.untilMs > nowMs then
+    table.insert(items, ui.label({ key = "copied", text = tr("panel.copied"), fontSize = 11, color = "primary" }))
+  else
+    table.insert(items, ui.button({
+      key = "copy",
+      glyph = "clipboard-copy",
+      text = tr("panel.copy"),
+      variant = "ghost",
+      onClick = function()
+        copyAlert(alert)
+        render()
+      end,
+    }))
+  end
+
+  if noctalia.getConfig("show_silence_button") ~= false then
+    local status = silenceStatus and silenceStatus.id == alert.id and silenceStatus.status or nil
+    if silencedIds[alert.id] then
+      table.insert(items, ui.label({ key = "silenced", text = tr("panel.silenced"), fontSize = 11, color = "primary" }))
+    elseif status == "pending" then
+      table.insert(items, ui.button({ key = "silencing", glyph = "hourglass", text = tr("panel.silencing"), variant = "ghost", enabled = false }))
+    elseif pendingSilence and pendingSilence.id == alert.id and pendingSilence.untilMs > nowMs then
+      table.insert(items, ui.button({
+        key = "confirm",
+        glyph = "bell-off",
+        text = tr("panel.silence_confirm", { duration = durationText(silenceMinutes()) }),
+        variant = "primary",
+        onClick = function()
+          pendingSilence = nil
+          requestSilence(alert.id)
+          render()
+        end,
+      }))
+    else
+      table.insert(items, ui.button({
+        key = "silence",
+        glyph = "bell-off",
+        text = tr("panel.silence", { duration = durationText(silenceMinutes()) }),
+        variant = "ghost",
+        onClick = function()
+          pendingSilence = { id = alert.id, untilMs = noctalia.nowMs() + CONFIRM_WINDOW_MS }
+          render()
+        end,
+      }))
+    end
+    if status == "error" and silenceStatus.message ~= "" then
+      table.insert(items, ui.label({
+        key = "silence_error",
+        text = silenceStatus.message,
+        fontSize = 11,
+        color = "error",
+        maxLines = 2,
+        flexGrow = 1,
+      }))
+    end
+  end
+
+  return ui.row({ gap = 6, align = "center" }, items)
 end
 
 local function alertCard(alert)
@@ -195,6 +324,8 @@ local function alertCard(alert)
     table.insert(children, ui.column({ gap = 5, align = "stretch" }, tagRows(alert.tags)))
   end
 
+  table.insert(children, actionRow(alert))
+
   return ui.column({
     key = `alert:{alert.id}`,
     gap = 6,
@@ -208,13 +339,26 @@ local function alertCard(alert)
   }, children)
 end
 
-local function rows()
+local function visibleAlerts()
+  if severityFilter == nil then
+    return alerts
+  end
   local out = {}
-  for index, alert in ipairs(alerts) do
+  for _, alert in ipairs(alerts) do
+    if alert.severity == severityFilter then
+      table.insert(out, alert)
+    end
+  end
+  return out
+end
+
+local function rows(list)
+  local out = {}
+  for index, alert in ipairs(list) do
     if index > MAX_ROWS then
       table.insert(out, ui.label({
         key = "more_rows",
-        text = tr("panel.more_rows", { count = tostring(#alerts - MAX_ROWS) }),
+        text = tr("panel.more_rows", { count = tostring(#list - MAX_ROWS) }),
         fontSize = 11,
         color = "on_surface_variant",
       }))
@@ -253,17 +397,50 @@ local function body()
       ui.label({ text = tr("panel.empty"), color = "on_surface_variant", textAlign = "center" }),
     })
   end
-  return ui.scroll({ flexGrow = 1, gap = 10, align = "stretch" }, rows())
+
+  local list = visibleAlerts()
+  if #list == 0 then
+    return ui.column(CENTERED, {
+      ui.label({ text = tr("panel.empty_filter"), color = "on_surface_variant", textAlign = "center" }),
+      ui.button({
+        text = tr("panel.clear_filter"),
+        variant = "ghost",
+        onClick = function()
+          severityFilter = nil
+          render()
+        end,
+      }),
+    })
+  end
+  return ui.scroll({ flexGrow = 1, gap = 10, align = "stretch" }, rows(list))
 end
 
+local function setFilter(severity)
+  severityFilter = severityFilter ~= severity and severity or nil
+  render()
+end
+
+-- Total (clears the filter) then one clickable badge per non-empty severity.
 local function headerBadges()
   local out = {}
   if counts ~= nil then
-    table.insert(out, badge(tostring(counts.total), "primary", 0.14))
-    for _, severity in ipairs({ "critical", "warning", "info", "other" }) do
+    table.insert(out, badge(tostring(counts.total), "primary", 0.14, {
+      key = "filter:all",
+      active = severityFilter == nil,
+      onClick = function()
+        setFilter(nil)
+      end,
+    }))
+    for _, severity in ipairs(SEVERITIES) do
       local n = counts[severity] or 0
       if n > 0 then
-        table.insert(out, badge(`{n} {tr("panel.severity." .. severity)}`, severityColor(severity), 0.16))
+        table.insert(out, badge(`{n} {tr("panel.severity." .. severity)}`, severityColor(severity), 0.16, {
+          key = `filter:{severity}`,
+          active = severityFilter == severity,
+          onClick = function()
+            setFilter(severity)
+          end,
+        }))
       end
     end
   end
@@ -275,7 +452,17 @@ render = function()
     return
   end
 
-  local titleRow = { 
+  -- Drop the transient bits once their window is over.
+  local nowMs = noctalia.nowMs()
+  if pendingSilence and pendingSilence.untilMs <= nowMs then
+    pendingSilence = nil
+  end
+  if copiedHint and copiedHint.untilMs <= nowMs then
+    copiedHint = nil
+  end
+  noctalia.setUpdateInterval((pendingSilence or copiedHint) and FAST_TICK_MS or AGE_REFRESH_MS)
+
+  local titleRow = {
     ui.glyph({ name = "bell", size = 20, color = "primary" }),
     ui.label({ text = tr("title"), fontSize = 17, fontWeight = "bold", color = "on_surface" }),
   }
@@ -297,6 +484,13 @@ render = function()
         enabled = fetchStatus ~= "loading",
         onClick = requestRefresh,
       }),
+      ui.button({
+        glyph = "settings",
+        variant = "ghost",
+        onClick = function()
+          noctalia.openSettings()
+        end,
+      }),
       ui.button({ glyph = "close", onClick = panel.close }),
     }),
   }
@@ -310,19 +504,15 @@ render = function()
   panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, children))
 end
 
-noctalia.state.watch("fetch_status", function()
-  syncFromState()
-  render()
-end)
-
-noctalia.state.watch("severity_colors", function()
-  syncFromState()
-  render()
-end)
+for _, key in ipairs({ "fetch_status", "severity_colors", "silence_status" }) do
+  noctalia.state.watch(key, function()
+    syncFromState()
+    render()
+  end)
+end
 
 function update()
-  noctalia.setUpdateInterval(AGE_REFRESH_MS)
-  render() -- no-op while closed; refreshes the relative ages while open
+  render() -- no-op while closed; refreshes ages and expires the transient hints while open
 end
 
 function onOpen(_context)
@@ -333,4 +523,6 @@ end
 
 function onClose()
   isOpen = false
+  pendingSilence = nil
+  copiedHint = nil
 end

@@ -34,6 +34,18 @@
       "warning": "warning",
       "info": "info",
       "other": "alerte"
+    },
+    "empty_filter": "Aucune alerte pour ce filtre.",
+    "clear_filter": "Tout afficher",
+    "copy": "Copier",
+    "copied": "Copié",
+    "silence": "Silence {duration}",
+    "silence_confirm": "Confirmer le silence {duration} ?",
+    "silencing": "Silence en cours…",
+    "silenced": "Silencée",
+    "duration": {
+      "hours": "{count} h",
+      "minutes": "{count} min"
     }
   },
   "settings": {
@@ -75,6 +87,39 @@
     "warning_color": {
       "label": "Couleur warning",
       "description": "Couleur des alertes warning."
+    },
+    "filters": {
+      "label": "Filtres",
+      "description": "Matchers Alertmanager envoyés à l'API, un par entrée, ex. team=infra ou env!~\"staging|dev\"."
+    },
+    "severity_label": {
+      "label": "Label de sévérité",
+      "description": "Nom du label qui porte la sévérité (certains setups utilisent level ou priority)."
+    },
+    "notify_new_alerts": {
+      "label": "Notifications bureau",
+      "description": "Envoie une notification (notify-send) quand une nouvelle alerte se déclenche."
+    },
+    "notify_min_severity": {
+      "label": "Notifier à partir de",
+      "description": "Ne notifie que les alertes d'au moins cette sévérité.",
+      "all": "toutes"
+    },
+    "show_silence_button": {
+      "label": "Bouton silence",
+      "description": "Affiche l'action silence sur chaque alerte (le token doit avoir le rôle Editor)."
+    },
+    "silence_duration": {
+      "label": "Durée des silences (minutes)",
+      "description": "Durée des silences créés depuis le panneau."
     }
+  },
+  "silence": {
+    "not_found": "Cette alerte n'est plus dans la liste.",
+    "forbidden": "Grafana a refusé (401/403) : créer un silence demande le rôle Editor sur le service account.",
+    "comment": "Silence posé depuis Noctalia pour {minutes} min"
+  },
+  "notify": {
+    "summary_title": "{count} nouvelles alertes Grafana"
   }
 }

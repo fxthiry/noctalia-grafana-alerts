@@ -2,8 +2,8 @@
 -- [[widget]] entry: glyph + firing-alert count, fed by the fetch service through
 -- shared state. Tint follows the worst severity (configured critical/warning
 -- colors published by the service as `severity_colors`, muted when all clear).
--- Click toggles the panel — so the tree contains no inline ui.button (inline
--- controls would eat their own clicks).
+-- Click toggles the panel, right click opens the settings — so the tree contains
+-- no inline ui.button (inline controls would eat their own clicks).
 
 local PANEL_ID = "fxthiry/grafana-alerts:panel"
 -- Theme roles used until the service has published its colors.
@@ -123,6 +123,10 @@ render()
 
 function onClick()
   noctalia.togglePanel(PANEL_ID)
+end
+
+function onRightClick()
+  noctalia.openSettings()
 end
 
 function onConfigChanged()

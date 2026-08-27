@@ -1,17 +1,18 @@
 # Grafana Alerts — firing Grafana alerts in the Noctalia bar.
-# Three entries: a headless fetch service (polls the Grafana Alertmanager API and
-# publishes shared state), a bar widget (count + severity tint, click toggles the
-# panel) and a panel (alert list with severity, folder, summary and labels).
+# Three entries: a headless fetch service (polls the Grafana Alertmanager API,
+# publishes shared state, sends desktop notifications, creates silences), a bar
+# widget (count + severity tint, click toggles the panel) and a panel (alert list
+# with severity filter, folder, summary, labels, copy and silence actions).
 
 id = "fxthiry/grafana-alerts"
 name = "Grafana Alerts"
-version = "0.1.0"
+version = "0.2.0"
 plugin_api = 19
 author = "fxthiry"
 license = "MIT"
-tags = ["bar", "monitoring", "panel", "service"]
+tags = ["bar", "monitoring", "notifications", "panel", "service"]
 icon = "alert-triangle"
-description = "Firing Grafana alerts in your bar: count tinted by severity, click for the list with labels."
+description = "Firing Grafana alerts in your bar: count tinted by severity, click for the list with labels, desktop notifications, one-click silences."
 
 [[setting]]
 key = "grafana_url"
@@ -44,11 +45,71 @@ description_key = "settings.ignore_datasource_alerts.description"
 default = true
 
 [[setting]]
+key = "filters"
+type = "string_list"
+label_key = "settings.filters.label"
+description_key = "settings.filters.description"
+default = []
+
+[[setting]]
+key = "severity_label"
+type = "string"
+label_key = "settings.severity_label.label"
+description_key = "settings.severity_label.description"
+default = "severity"
+
+[[setting]]
 key = "hidden_labels"
 type = "string_list"
 label_key = "settings.hidden_labels.label"
 description_key = "settings.hidden_labels.description"
 default = ["alertname", "grafana_folder", "severity"]
+
+[[setting]]
+key = "notify_new_alerts"
+type = "bool"
+label_key = "settings.notify_new_alerts.label"
+description_key = "settings.notify_new_alerts.description"
+default = true
+
+[[setting]]
+key = "notify_min_severity"
+type = "select"
+label_key = "settings.notify_min_severity.label"
+description_key = "settings.notify_min_severity.description"
+default = "warning"
+
+  [[setting.options]]
+  value = "critical"
+  label_key = "panel.severity.critical"
+
+  [[setting.options]]
+  value = "warning"
+  label_key = "panel.severity.warning"
+
+  [[setting.options]]
+  value = "info"
+  label_key = "panel.severity.info"
+
+  [[setting.options]]
+  value = "other"
+  label_key = "settings.notify_min_severity.all"
+
+[[setting]]
+key = "show_silence_button"
+type = "bool"
+label_key = "settings.show_silence_button.label"
+description_key = "settings.show_silence_button.description"
+default = true
+
+[[setting]]
+key = "silence_duration"
+type = "int"
+label_key = "settings.silence_duration.label"
+description_key = "settings.silence_duration.description"
+default = 120
+min = 5
+max = 10080
 
 [[setting]]
 key = "critical_color"
