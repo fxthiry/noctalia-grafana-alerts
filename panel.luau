@@ -46,7 +46,7 @@ local function badge(text, color, fillAlpha)
     paddingV = 2,
     align = "center",
   }, {
-    ui.label({ text = text, fontSize = 11, fontWeight = "medium", color = color }),
+    ui.label({ text = text, fontSize = 12, fontWeight = "medium", color = color }),
   })
 end
 
@@ -83,9 +83,9 @@ local function tagChips(tags)
       gap = 3,
       align = "center",
     }, {
-      ui.label({ text = tag.key, fontSize = 10, color = "on_surface_variant" }),
-      ui.label({ text = "=", fontSize = 10, color = "outline" }),
-      ui.label({ text = tag.value, fontSize = 10, fontWeight = "medium", color = "on_surface" }),
+      ui.label({ text = tag.key, fontSize = 11, color = "on_surface_variant" }),
+      ui.label({ text = "=", fontSize = 11, color = "outline" }),
+      ui.label({ text = tag.value, fontSize = 11, fontWeight = "medium", color = "on_surface" }),
     }))
   end
   return chips
@@ -97,10 +97,11 @@ local function alertCard(alert)
 
   local children = {
     ui.row({ gap = 8, align = "center" }, {
-      ui.glyph({ name = style.glyph, size = 16, color = style.color }),
+      ui.glyph({ name = style.glyph, size = 18, color = style.color }),
       ui.button({
         key = `open:{alert.id}`,
         text = alert.name,
+        fontWeight = "bold",
         variant = "ghost",
         contentAlign = "start",
         flexGrow = 1,
@@ -123,7 +124,7 @@ local function alertCard(alert)
   if #metaParts > 0 then
     table.insert(children, ui.label({
       text = table.concat(metaParts, "  ·  "),
-      fontSize = 11,
+      fontSize = 12,
       color = "on_surface_variant",
       maxLines = 1,
     }))
@@ -131,7 +132,7 @@ local function alertCard(alert)
 
   local text = alert.summary ~= "" and alert.summary or alert.description
   if text ~= "" then
-    table.insert(children, ui.label({ text = text, fontSize = 12, color = "on_surface", maxLines = 3 }))
+    table.insert(children, ui.label({ text = text, fontSize = 13, color = "on_surface", maxLines = 3 }))
   end
 
   if #alert.tags > 0 then
@@ -220,7 +221,7 @@ render = function()
 
   local titleRow = { 
     ui.glyph({ name = "brand-grafana", size = 20, color = "primary" }),
-    ui.label({ text = tr("title"), fontSize = 16, fontWeight = "bold", color = "on_surface" }),
+    ui.label({ text = tr("title"), fontSize = 17, fontWeight = "bold", color = "on_surface" }),
   }
   for _, node in ipairs(headerBadges()) do
     table.insert(titleRow, node)
