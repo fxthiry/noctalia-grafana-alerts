@@ -1,0 +1,90 @@
+# Grafana Alerts — firing Grafana alerts in the Noctalia bar.
+# Three entries: a headless fetch service (polls the Grafana Alertmanager API and
+# publishes shared state), a bar widget (count + severity tint, click toggles the
+# panel) and a panel (alert list with severity, folder, summary and labels).
+
+id = "fxthiry/grafana-alerts"
+name = "Grafana Alerts"
+version = "0.1.0"
+plugin_api = 19
+author = "fxthiry"
+license = "MIT"
+tags = ["bar", "monitoring", "panel", "service"]
+icon = "alert-triangle"
+description = "Firing Grafana alerts in your bar: count tinted by severity, click for the list with labels."
+
+[[setting]]
+key = "grafana_url"
+type = "string"
+label_key = "settings.grafana_url.label"
+description_key = "settings.grafana_url.description"
+default = ""
+
+[[setting]]
+key = "api_token"
+type = "string"
+label_key = "settings.api_token.label"
+description_key = "settings.api_token.description"
+default = ""
+
+[[setting]]
+key = "refresh_interval"
+type = "int"
+label_key = "settings.refresh_interval.label"
+description_key = "settings.refresh_interval.description"
+default = 60
+min = 15
+max = 3600
+
+[[setting]]
+key = "ignore_datasource_alerts"
+type = "bool"
+label_key = "settings.ignore_datasource_alerts.label"
+description_key = "settings.ignore_datasource_alerts.description"
+default = true
+
+[[setting]]
+key = "hidden_labels"
+type = "string_list"
+label_key = "settings.hidden_labels.label"
+description_key = "settings.hidden_labels.description"
+default = ["alertname", "grafana_folder", "severity"]
+
+[[setting]]
+key = "allow_insecure_tls"
+type = "bool"
+label_key = "settings.allow_insecure_tls.label"
+description_key = "settings.allow_insecure_tls.description"
+default = false
+
+# Headless service: owns all HTTP calls, publishes alerts/counts to shared state.
+[[service]]
+id = "fetch"
+entry = "service.luau"
+
+[[widget]]
+id = "bar"
+entry = "bar.luau"
+
+  [[widget.setting]]
+  key = "glyph"
+  type = "glyph"
+  label_key = "settings.glyph.label"
+  default = "alert-triangle"
+
+  [[widget.setting]]
+  key = "hide_when_zero"
+  type = "bool"
+  label_key = "settings.hide_when_zero.label"
+  description_key = "settings.hide_when_zero.description"
+  default = false
+
+# Open with the bar widget click, or: noctalia msg panel-toggle fxthiry/grafana-alerts:panel
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = 720
+height = 640
+placement = "attached"
+position = "auto"
+open_near_click = true

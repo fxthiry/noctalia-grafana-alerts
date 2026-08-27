@@ -1,0 +1,72 @@
+{
+  "title": "Alertes Grafana",
+  "bar": {
+    "tooltip": "{total} alerte(s) active(s) — {critical} critique(s), {warning} warning"
+  },
+  "service": {
+    "unnamed": "(alerte sans nom)"
+  },
+  "error": {
+    "not_configured": "URL Grafana ou token non renseignés. Configure-les dans Réglages → Plugins → Grafana Alerts.",
+    "unauthorized": "Grafana a refusé le token (401/403). Vérifie le token du service account et son rôle.",
+    "network": "Grafana injoignable",
+    "http": "Grafana a répondu HTTP {status}",
+    "parse": "Réponse Grafana illisible",
+    "queue": "File HTTP pleine, réessaie plus tard"
+  },
+  "panel": {
+    "loading": "Chargement des alertes…",
+    "empty": "Aucune alerte active. Tout est vert !",
+    "error_title": "Impossible de récupérer les alertes",
+    "retry": "Réessayer",
+    "settings": "Réglages",
+    "updated_at": "Mis à jour {time}",
+    "more_rows": "…et {count} de plus",
+    "since": "depuis {time} ({age})",
+    "age": {
+      "now": "à l'instant",
+      "minutes": "il y a {count} min",
+      "hours": "il y a {hours} h {minutes} min",
+      "days": "il y a {count} jours"
+    },
+    "severity": {
+      "critical": "critique",
+      "warning": "warning",
+      "info": "info",
+      "other": "alerte"
+    }
+  },
+  "settings": {
+    "grafana_url": {
+      "label": "URL Grafana",
+      "description": "URL de base de ton Grafana, ex. https://grafana.example.com"
+    },
+    "api_token": {
+      "label": "Token API",
+      "description": "Token de service account (Administration → Service accounts, le rôle Viewer suffit)."
+    },
+    "refresh_interval": {
+      "label": "Intervalle de rafraîchissement (secondes)",
+      "description": "Fréquence de récupération des alertes."
+    },
+    "ignore_datasource_alerts": {
+      "label": "Ignorer les alertes datasource",
+      "description": "Masque les alertes internes DatasourceNoData / DatasourceError."
+    },
+    "hidden_labels": {
+      "label": "Labels masqués",
+      "description": "Labels non affichés en tags dans le panneau (les labels internes __ sont toujours masqués)."
+    },
+    "allow_insecure_tls": {
+      "label": "Autoriser TLS non vérifié",
+      "description": "Accepter les certificats auto-signés."
+    },
+    "glyph": {
+      "label": "Icône de la barre"
+    },
+    "hide_when_zero": {
+      "label": "Masquer si vide",
+      "description": "Masque le widget quand aucune alerte n'est active."
+    }
+  }
+}

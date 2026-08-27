@@ -1,0 +1,72 @@
+{
+  "title": "Grafana alerts",
+  "bar": {
+    "tooltip": "{total} firing alert(s) — {critical} critical, {warning} warning"
+  },
+  "service": {
+    "unnamed": "(unnamed alert)"
+  },
+  "error": {
+    "not_configured": "Grafana URL or API token not set. Configure them in Settings → Plugins → Grafana Alerts.",
+    "unauthorized": "Grafana rejected the token (401/403). Check the service account token and its role.",
+    "network": "Could not reach Grafana",
+    "http": "Grafana answered HTTP {status}",
+    "parse": "Could not parse the Grafana response",
+    "queue": "HTTP queue full, retry later"
+  },
+  "panel": {
+    "loading": "Loading alerts…",
+    "empty": "No firing alert. All clear!",
+    "error_title": "Couldn't fetch alerts",
+    "retry": "Retry",
+    "settings": "Settings",
+    "updated_at": "Updated {time}",
+    "more_rows": "…and {count} more",
+    "since": "since {time} ({age})",
+    "age": {
+      "now": "just now",
+      "minutes": "{count} min ago",
+      "hours": "{hours} h {minutes} min ago",
+      "days": "{count} days ago"
+    },
+    "severity": {
+      "critical": "critical",
+      "warning": "warning",
+      "info": "info",
+      "other": "alert"
+    }
+  },
+  "settings": {
+    "grafana_url": {
+      "label": "Grafana URL",
+      "description": "Base URL of your Grafana, e.g. https://grafana.example.com"
+    },
+    "api_token": {
+      "label": "API token",
+      "description": "Service account token (Administration → Service accounts, role Viewer is enough)."
+    },
+    "refresh_interval": {
+      "label": "Refresh interval (seconds)",
+      "description": "How often alerts are re-fetched."
+    },
+    "ignore_datasource_alerts": {
+      "label": "Ignore datasource alerts",
+      "description": "Hide the built-in DatasourceNoData / DatasourceError alerts."
+    },
+    "hidden_labels": {
+      "label": "Hidden labels",
+      "description": "Labels not shown as tags in the panel (internal __ labels are always hidden)."
+    },
+    "allow_insecure_tls": {
+      "label": "Allow insecure TLS",
+      "description": "Accept self-signed certificates."
+    },
+    "glyph": {
+      "label": "Bar glyph"
+    },
+    "hide_when_zero": {
+      "label": "Hide when empty",
+      "description": "Hide the bar widget when no alert is firing."
+    }
+  }
+}
