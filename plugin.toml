@@ -51,6 +51,20 @@ description_key = "settings.hidden_labels.description"
 default = ["alertname", "grafana_folder", "severity"]
 
 [[setting]]
+key = "critical_color"
+type = "color"
+label_key = "settings.critical_color.label"
+description_key = "settings.critical_color.description"
+default = "#ff5c5c"
+
+[[setting]]
+key = "warning_color"
+type = "color"
+label_key = "settings.warning_color.label"
+description_key = "settings.warning_color.description"
+default = "#f1c232"
+
+[[setting]]
 key = "allow_insecure_tls"
 type = "bool"
 label_key = "settings.allow_insecure_tls.label"

@@ -19,6 +19,14 @@ local function countText()
   return "…"
 end
 
+local function configuredColor(key, fallback)
+  local value = noctalia.getConfig(key)
+  if type(value) ~= "string" or noctalia.string.trim(value) == "" then
+    return fallback
+  end
+  return value
+end
+
 local function tint()
   if fetchStatus == "error" then
     return "error"
@@ -27,10 +35,10 @@ local function tint()
     return "on_surface_variant"
   end
   if counts.critical > 0 then
-    return "error"
+    return configuredColor("critical_color", "error")
   end
   if counts.warning > 0 then
-    return "tertiary"
+    return configuredColor("warning_color", "#f1c232")
   end
   if counts.total > 0 then
     return "on_surface"

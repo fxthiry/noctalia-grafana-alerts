@@ -67,6 +67,14 @@
     "hide_when_zero": {
       "label": "Masquer si vide",
       "description": "Masque le widget quand aucune alerte n'est active."
+    },
+    "critical_color": {
+      "label": "Couleur critique",
+      "description": "Couleur des alertes critiques (barre, badges)."
+    },
+    "warning_color": {
+      "label": "Couleur warning",
+      "description": "Couleur des alertes warning."
     }
   }
 }

@@ -67,6 +67,14 @@
     "hide_when_zero": {
       "label": "Hide when empty",
       "description": "Hide the bar widget when no alert is firing."
+    },
+    "critical_color": {
+      "label": "Critical color",
+      "description": "Color used for critical alerts (bar tint, badges)."
+    },
+    "warning_color": {
+      "label": "Warning color",
+      "description": "Color used for warning alerts."
     }
   }
 }

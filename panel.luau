@@ -6,12 +6,26 @@
 local MAX_ROWS = 100
 local CENTERED = { flexGrow = 1, align = "center", justify = "center", gap = 8 }
 
-local SEVERITY_STYLE = {
-  critical = { color = "error", glyph = "alert-octagon" },
-  warning = { color = "tertiary", glyph = "alert-triangle" },
-  info = { color = "primary", glyph = "info-circle" },
-  other = { color = "on_surface_variant", glyph = "bell" },
-}
+local function configuredColor(key, fallback)
+  local value = noctalia.getConfig(key)
+  if type(value) ~= "string" or noctalia.string.trim(value) == "" then
+    return fallback
+  end
+  return value
+end
+
+local function severityStyle(severity)
+  if severity == "critical" then
+    return { color = configuredColor("critical_color", "error"), glyph = "alert-octagon" }
+  end
+  if severity == "warning" then
+    return { color = configuredColor("warning_color", "#f1c232"), glyph = "alert-triangle" }
+  end
+  if severity == "info" then
+    return { color = "primary", glyph = "info-circle" }
+  end
+  return { color = "on_surface_variant", glyph = "bell" }
+end
 
 local tr = noctalia.tr
 
@@ -36,10 +50,18 @@ local function requestRefresh()
   noctalia.state.set("refresh_requested", (noctalia.state.get("refresh_requested") or 0) + 1)
 end
 
+-- Theme tokens accept a "/alpha" suffix; raw hex colors don't, so fall back to a neutral fill.
+local function withAlpha(color, alpha, fallback)
+  if color:sub(1, 1) == "#" then
+    return fallback
+  end
+  return `{color}/{alpha}`
+end
+
 local function badge(text, color, fillAlpha)
   return ui.row({
-    fill = `{color}/{fillAlpha}`,
-    border = color .. "/0.24",
+    fill = withAlpha(color, fillAlpha, "surface_variant/0.7"),
+    border = withAlpha(color, "0.24", color),
     borderWidth = 1,
     radius = 8,
     paddingH = 7,
@@ -92,7 +114,7 @@ local function tagChips(tags)
 end
 
 local function alertCard(alert)
-  local style = SEVERITY_STYLE[alert.severity] or SEVERITY_STYLE.other
+  local style = severityStyle(alert.severity)
   local severityText = alert.severityLabel ~= "" and alert.severityLabel or tr("panel.severity." .. alert.severity)
 
   local children = {
@@ -146,7 +168,7 @@ local function alertCard(alert)
     paddingV = 10,
     align = "stretch",
     fill = "surface_variant/0.10",
-    border = style.color .. "/0.35",
+    border = withAlpha(style.color, "0.35", style.color),
     borderWidth = 1,
     radius = 11,
   }, children)
@@ -205,10 +227,10 @@ local function headerBadges()
   if counts ~= nil then
     table.insert(out, badge(tostring(counts.total), "primary", "0.14"))
     if counts.critical > 0 then
-      table.insert(out, badge(`{counts.critical} {tr("panel.severity.critical")}`, "error", "0.16"))
+      table.insert(out, badge(`{counts.critical} {tr("panel.severity.critical")}`, configuredColor("critical_color", "error"), "0.16"))
     end
     if counts.warning > 0 then
-      table.insert(out, badge(`{counts.warning} {tr("panel.severity.warning")}`, "tertiary", "0.16"))
+      table.insert(out, badge(`{counts.warning} {tr("panel.severity.warning")}`, configuredColor("warning_color", "#f1c232"), "0.16"))
     end
   end
   return out
