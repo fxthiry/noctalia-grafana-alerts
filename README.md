@@ -6,6 +6,8 @@ sévérité, et au clic un panneau avec la liste (sévérité, dossier, résumé
 - Source : API Alertmanager de Grafana (`/api/alertmanager/grafana/api/v2/alerts`),
   alertes actives, non silencées, non inhibées.
 - Le clic sur le nom d'une alerte l'ouvre dans Grafana.
+- Le panneau s'ouvre au clic sur le widget, ou en ligne de commande :
+  `noctalia msg panel-toggle fxthiry/grafana-alerts:panel`.
 - Les alertes internes `DatasourceNoData` / `DatasourceError` sont ignorées par défaut.
 
 ## Installation
@@ -34,7 +36,16 @@ Réglages → Plugins → Grafana Alerts :
 | `refresh_interval` | 60 s | Fréquence de récupération |
 | `ignore_datasource_alerts` | `true` | Masque `DatasourceNoData` / `DatasourceError` |
 | `hidden_labels` | `alertname, grafana_folder, severity` | Labels non affichés en tags |
+| `critical_color` | `#ff5c5c` | Couleur des alertes critiques (teinte de la barre, badges, bordures) |
+| `warning_color` | `#f1c232` | Couleur des alertes warning |
 | `allow_insecure_tls` | `false` | Certificats auto-signés |
+
+Réglages propres au widget de barre (Réglages → Barre → widget *Grafana Alerts*) :
+
+| Réglage | Défaut | Rôle |
+|---|---|---|
+| `glyph` | `alert-triangle` | Icône affichée dans la barre |
+| `hide_when_zero` | `false` | Masque le widget quand aucune alerte n'est active |
 
 Créer le token : Grafana → Administration → Users and access → Service accounts →
 *Add service account* (rôle Viewer) → *Add service account token*.

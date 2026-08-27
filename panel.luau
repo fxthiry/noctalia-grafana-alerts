@@ -4,33 +4,21 @@
 -- alert in Grafana), folder and start time, summary, then the label chips.
 
 local MAX_ROWS = 100
+-- ui.row has no wrap: chips are chunked into rows by estimated width (panel is 720 wide).
+local CHIP_ROW_BUDGET = 620
+local CHIP_CHAR_WIDTH = 6.3 -- ≈ px per character at fontSize 11
+local CHIP_FIXED_WIDTH = 12 + 6 + 7 -- paddingH ×2, inner gaps, the "=" glyph
+local AGE_REFRESH_MS = 30000 -- keep "x min ago" honest while the panel stays open
 local CENTERED = { flexGrow = 1, align = "center", justify = "center", gap = 8 }
-
-local function configuredColor(key, fallback)
-  local value = noctalia.getConfig(key)
-  if type(value) ~= "string" or noctalia.string.trim(value) == "" then
-    return fallback
-  end
-  return value
-end
-
-local function severityStyle(severity)
-  if severity == "critical" then
-    return { color = configuredColor("critical_color", "error"), glyph = "alert-octagon" }
-  end
-  if severity == "warning" then
-    return { color = configuredColor("warning_color", "#f1c232"), glyph = "alert-triangle" }
-  end
-  if severity == "info" then
-    return { color = "primary", glyph = "info-circle" }
-  end
-  return { color = "on_surface_variant", glyph = "bell" }
-end
+-- Theme roles used until the service has published its colors.
+local FALLBACK_COLORS = { critical = "error", warning = "tertiary", info = "primary", other = "on_surface_variant" }
+local SEVERITY_GLYPHS = { critical = "alert-octagon", warning = "alert-triangle", info = "info-circle", other = "bell" }
 
 local tr = noctalia.tr
 
 local alerts = {}
 local counts = nil
+local colors = nil
 local fetchStatus = "loading"
 local errorMessage = ""
 local lastUpdatedText = ""
@@ -41,27 +29,47 @@ local render
 local function syncFromState()
   alerts = noctalia.state.get("alerts") or {}
   counts = noctalia.state.get("counts")
+  colors = noctalia.state.get("severity_colors")
   fetchStatus = noctalia.state.get("fetch_status") or "loading"
   errorMessage = noctalia.state.get("error_message") or ""
   lastUpdatedText = noctalia.state.get("last_updated_text") or ""
+end
+
+local function severityColor(severity)
+  local color = colors and colors[severity]
+  if type(color) == "string" and color ~= "" then
+    return color
+  end
+  return FALLBACK_COLORS[severity] or FALLBACK_COLORS.other
+end
+
+local function severityStyle(severity)
+  return { color = severityColor(severity), glyph = SEVERITY_GLYPHS[severity] or SEVERITY_GLYPHS.other }
 end
 
 local function requestRefresh()
   noctalia.state.set("refresh_requested", (noctalia.state.get("refresh_requested") or 0) + 1)
 end
 
--- Theme tokens accept a "/alpha" suffix; raw hex colors don't, so fall back to a neutral fill.
-local function withAlpha(color, alpha, fallback)
-  if color:sub(1, 1) == "#" then
-    return fallback
+-- Theme roles take a "/alpha" suffix; hex colors get the alpha byte appended (#rrggbbaa).
+local function withAlpha(color, alpha)
+  if color:sub(1, 1) ~= "#" then
+    return `{color}/{alpha}`
   end
-  return `{color}/{alpha}`
+  local hex = color:sub(2)
+  if #hex == 3 then
+    hex = hex:gsub(".", "%0%0")
+  end
+  if #hex ~= 6 then
+    return color -- already carries an alpha byte, or unknown form: leave it alone
+  end
+  return string.format("#%s%02x", hex, math.floor(alpha * 255 + 0.5))
 end
 
 local function badge(text, color, fillAlpha)
   return ui.row({
-    fill = withAlpha(color, fillAlpha, "surface_variant/0.7"),
-    border = withAlpha(color, "0.24", color),
+    fill = withAlpha(color, fillAlpha),
+    border = withAlpha(color, 0.24),
     borderWidth = 1,
     radius = 8,
     paddingH = 7,
@@ -91,26 +99,53 @@ local function ageText(startedAt)
   return tr("panel.age.days", { count = tostring(math.floor(hours / 24)) })
 end
 
-local function tagChips(tags)
-  local chips = {}
+local function tagChip(tag)
+  return ui.row({
+    key = `tag:{tag.key}`,
+    fill = "surface_variant/0.6",
+    border = "outline/0.3",
+    borderWidth = 1,
+    radius = 6,
+    paddingH = 6,
+    paddingV = 2,
+    gap = 3,
+    align = "center",
+  }, {
+    ui.label({ text = tag.key, fontSize = 11, color = "on_surface_variant" }),
+    ui.label({ text = "=", fontSize = 11, color = "outline" }),
+    ui.label({ text = tag.value, fontSize = 11, fontWeight = "medium", color = "on_surface" }),
+  })
+end
+
+local function chipWidth(tag)
+  return CHIP_FIXED_WIDTH + (#tag.key + #tag.value) * CHIP_CHAR_WIDTH
+end
+
+-- Greedy line breaking: one ui.row per line of chips.
+local function tagRows(tags)
+  local lines, current, used = {}, {}, 0
+  local gap = 5
   for _, tag in ipairs(tags) do
-    table.insert(chips, ui.row({
-      key = `tag:{tag.key}`,
-      fill = "surface_variant/0.6",
-      border = "outline/0.3",
-      borderWidth = 1,
-      radius = 6,
-      paddingH = 6,
-      paddingV = 2,
-      gap = 3,
-      align = "center",
-    }, {
-      ui.label({ text = tag.key, fontSize = 11, color = "on_surface_variant" }),
-      ui.label({ text = "=", fontSize = 11, color = "outline" }),
-      ui.label({ text = tag.value, fontSize = 11, fontWeight = "medium", color = "on_surface" }),
-    }))
+    local width = chipWidth(tag)
+    if #current > 0 and used + gap + width > CHIP_ROW_BUDGET then
+      table.insert(lines, current)
+      current, used = {}, 0
+    end
+    table.insert(current, tagChip(tag))
+    used += (#current > 1 and gap or 0) + width
   end
-  return chips
+  if #current > 0 then
+    table.insert(lines, current)
+  end
+
+  local rows = {}
+  for index, chips in ipairs(lines) do
+    -- The row measures its content a few px short and clips its last child;
+    -- a trailing filler label absorbs that shortfall instead of the last chip.
+    table.insert(chips, ui.row({ key = "filler", minWidth = 24 }, { ui.label({ text = " " }) }))
+    table.insert(rows, ui.row({ key = `tags:{index}`, gap = gap, align = "center" }, chips))
+  end
+  return rows
 end
 
 local function alertCard(alert)
@@ -123,7 +158,6 @@ local function alertCard(alert)
       ui.button({
         key = `open:{alert.id}`,
         text = alert.name,
-        fontWeight = "bold",
         variant = "ghost",
         contentAlign = "start",
         flexGrow = 1,
@@ -132,7 +166,7 @@ local function alertCard(alert)
           noctalia.runAsync("xdg-open " .. url)
         end,
       }),
-      badge(severityText, style.color, "0.16"),
+      badge(severityText, style.color, 0.16),
     }),
   }
 
@@ -158,7 +192,7 @@ local function alertCard(alert)
   end
 
   if #alert.tags > 0 then
-    table.insert(children, ui.row({ gap = 5, wrap = true, align = "center" }, tagChips(alert.tags)))
+    table.insert(children, ui.column({ gap = 5, align = "stretch" }, tagRows(alert.tags)))
   end
 
   return ui.column({
@@ -168,7 +202,7 @@ local function alertCard(alert)
     paddingV = 10,
     align = "stretch",
     fill = "surface_variant/0.10",
-    border = withAlpha(style.color, "0.35", style.color),
+    border = withAlpha(style.color, 0.35),
     borderWidth = 1,
     radius = 11,
   }, children)
@@ -225,12 +259,12 @@ end
 local function headerBadges()
   local out = {}
   if counts ~= nil then
-    table.insert(out, badge(tostring(counts.total), "primary", "0.14"))
-    if counts.critical > 0 then
-      table.insert(out, badge(`{counts.critical} {tr("panel.severity.critical")}`, configuredColor("critical_color", "error"), "0.16"))
-    end
-    if counts.warning > 0 then
-      table.insert(out, badge(`{counts.warning} {tr("panel.severity.warning")}`, configuredColor("warning_color", "#f1c232"), "0.16"))
+    table.insert(out, badge(tostring(counts.total), "primary", 0.14))
+    for _, severity in ipairs({ "critical", "warning", "info", "other" }) do
+      local n = counts[severity] or 0
+      if n > 0 then
+        table.insert(out, badge(`{n} {tr("panel.severity." .. severity)}`, severityColor(severity), 0.16))
+      end
     end
   end
   return out
@@ -242,7 +276,7 @@ render = function()
   end
 
   local titleRow = { 
-    ui.glyph({ name = "brand-grafana", size = 20, color = "primary" }),
+    ui.glyph({ name = "bell", size = 20, color = "primary" }),
     ui.label({ text = tr("title"), fontSize = 17, fontWeight = "bold", color = "on_surface" }),
   }
   for _, node in ipairs(headerBadges()) do
@@ -280,6 +314,16 @@ noctalia.state.watch("fetch_status", function()
   syncFromState()
   render()
 end)
+
+noctalia.state.watch("severity_colors", function()
+  syncFromState()
+  render()
+end)
+
+function update()
+  noctalia.setUpdateInterval(AGE_REFRESH_MS)
+  render() -- no-op while closed; refreshes the relative ages while open
+end
 
 function onOpen(_context)
   syncFromState()

@@ -9,12 +9,17 @@
 --   fetch_status       "loading" | "ok" | "error" (published last)
 --   error_message      human readable error ("" when none)
 --   last_updated_text  "%H:%M" of the last successful fetch
+--   severity_colors    { critical, warning, info, other } — configured colors
+--                      (hex) or theme role tokens, single source of truth for
+--                      the bar widget and the panel
 -- State keys consumed:
 --   refresh_requested  bumped by the panel to force a refresh
 
 local DEFAULT_INTERVAL_S = 60
 local ALERTS_PATH = "/api/alertmanager/grafana/api/v2/alerts?active=true&silenced=false&inhibited=false"
 local SEVERITY_RANK = { critical = 0, warning = 1, info = 2, other = 3 }
+-- Fallbacks when the color settings are blank (keep in sync with plugin.toml defaults).
+local DEFAULT_COLORS = { critical = "#ff5c5c", warning = "#f1c232" }
 
 local trim = noctalia.string.trim
 local tr = noctalia.tr
@@ -30,6 +35,23 @@ end
 local function readIntervalMs()
   local interval = tonumber(noctalia.getConfig("refresh_interval")) or DEFAULT_INTERVAL_S
   return math.max(15, interval) * 1000
+end
+
+local function configuredColor(key, fallback)
+  local value = noctalia.getConfig(key)
+  if type(value) ~= "string" or trim(value) == "" then
+    return fallback
+  end
+  return trim(value)
+end
+
+local function publishColors()
+  noctalia.state.set("severity_colors", {
+    critical = configuredColor("critical_color", DEFAULT_COLORS.critical),
+    warning = configuredColor("warning_color", DEFAULT_COLORS.warning),
+    info = "primary",
+    other = "on_surface_variant",
+  })
 end
 
 local function hiddenLabelSet()
@@ -247,7 +269,9 @@ function update()
 end
 
 function onConfigChanged()
+  publishColors()
   startFetch()
 end
 
+publishColors()
 startFetch()
