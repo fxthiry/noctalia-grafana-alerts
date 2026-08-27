@@ -1,18 +1,35 @@
-# Grafana Alerts — plugin Noctalia
+# Grafana Alerts for Noctalia
 
-Les alertes Grafana **en cours** dans la barre Noctalia : un compteur teinté selon la
-sévérité, et au clic un panneau avec la liste (sévérité, dossier, résumé, labels).
+Firing Grafana alerts in your [Noctalia](https://noctalia.dev) bar: a counter tinted by
+severity, and one click away a panel with the full list — severity, folder, summary,
+labels — plus desktop notifications, one-click silences and copy-to-clipboard.
 
-- Source : API Alertmanager de Grafana (`/api/alertmanager/grafana/api/v2/alerts`),
-  alertes actives, non silencées, non inhibées.
-- Le clic sur le nom d'une alerte l'ouvre dans Grafana.
-- Le panneau s'ouvre au clic sur le widget, ou en ligne de commande :
-  `noctalia msg panel-toggle fxthiry/grafana-alerts:panel`. Clic droit sur le widget
-  (ou l'engrenage du panneau) : réglages ; clic du milieu : réglages du widget (Noctalia).
-- Les alertes internes `DatasourceNoData` / `DatasourceError` sont ignorées par défaut.
-- Notification bureau (`notify-send`) quand une nouvelle alerte se déclenche.
-- Depuis le panneau : filtre par sévérité, copie de l'alerte (nom, résumé, labels, URL),
-  et pose d'un silence en deux clics.
+![Grafana Alerts panel](screenshots/panel.png)
+
+## Features
+
+- **Bar widget** — glyph + number of firing alerts, tinted by the worst severity
+  (critical / warning / all clear). Tooltip with the per-severity breakdown and the last
+  error, if any. Left click opens the panel, right click opens the settings.
+
+  ![Bar widget](screenshots/bar.png)
+
+- **Panel** — one card per alert: severity badge, name (click opens the alert in
+  Grafana), folder, start time and age, summary, label chips. Header badges filter by
+  severity.
+- **Desktop notifications** — a `notify-send` notification when a new alert starts
+  firing (urgency `critical` for critical ones), with a minimum severity setting.
+- **Silences** — *Silence 2 h* → *Confirm* creates an Alertmanager silence matching
+  the alert's labels, exactly like Grafana's own *Silence* button.
+- **Copy** — name, folder, summary, labels and URL to the clipboard.
+- **API-side filters** — Alertmanager matchers (`team=infra`, `env!~"staging|dev"`) so
+  you only fetch what you care about.
+- **Configurable** — severity label name, severity colors, hidden labels, refresh
+  interval, self-signed certificates, translations in English and French.
+
+The data comes from Grafana's built-in Alertmanager API
+(`/api/alertmanager/grafana/api/v2/alerts`): active alerts, not silenced, not inhibited.
+The internal `DatasourceNoData` / `DatasourceError` alerts are ignored by default.
 
 ## Installation
 
@@ -21,84 +38,120 @@ git clone https://github.com/fxthiry/noctalia-grafana-alerts ~/.local/share/noct
 noctalia msg plugins enable fxthiry/grafana-alerts
 ```
 
-Puis ajouter le widget à la barre (Réglages → Barre → Ajouter un widget → *Grafana Alerts*),
-ou en TOML :
+Then add the widget to your bar (Settings → Bar → Add widget → *Grafana Alerts*), or in
+TOML:
 
 ```toml
 [widget.grafana]
 type = "fxthiry/grafana-alerts:bar"
 ```
 
+The panel opens with a click on the widget, or from the command line:
+
+```sh
+noctalia msg panel-toggle fxthiry/grafana-alerts:panel
+```
+
+Requires Noctalia v5 (plugin API ≥ 19), `notify-send` for desktop notifications and
+`xdg-open` to open alerts in your browser.
+
 ## Configuration
 
-Réglages → Plugins → Grafana Alerts :
+Settings → Plugins → Grafana Alerts:
 
-| Réglage | Défaut | Rôle |
+| Setting | Default | Description |
 |---|---|---|
-| `grafana_url` | — | URL de base, ex. `https://grafana.example.com` |
-| `api_token` | — | Token d'un *service account* Grafana (rôle **Viewer** suffisant) |
-| `refresh_interval` | 60 s | Fréquence de récupération |
-| `ignore_datasource_alerts` | `true` | Masque `DatasourceNoData` / `DatasourceError` |
-| `filters` | — | Matchers Alertmanager ajoutés à la requête (`team=infra`, `env!~"staging\|dev"`), un par entrée |
-| `severity_label` | `severity` | Label qui porte la sévérité (`level`, `priority`…) ; toujours masqué des tags |
-| `hidden_labels` | `alertname, grafana_folder, severity` | Labels non affichés en tags |
-| `notify_new_alerts` | `true` | Notification bureau à chaque nouvelle alerte (via `notify-send`) |
-| `notify_min_severity` | `warning` | Sévérité minimale notifiée (`critical`, `warning`, `info`, toutes) |
-| `show_silence_button` | `true` | Bouton *Silence* sur chaque alerte |
-| `silence_duration` | 120 min | Durée des silences créés depuis le panneau |
-| `critical_color` | `#ff5c5c` | Couleur des alertes critiques (teinte de la barre, badges, bordures) |
-| `warning_color` | `#f1c232` | Couleur des alertes warning |
-| `allow_insecure_tls` | `false` | Certificats auto-signés |
+| `grafana_url` | — | Base URL, e.g. `https://grafana.example.com` |
+| `api_token` | — | Grafana *service account* token (role **Viewer** is enough to read; **Editor** to create silences) |
+| `refresh_interval` | 60 s | Polling interval (15 s minimum) |
+| `ignore_datasource_alerts` | `true` | Hide `DatasourceNoData` / `DatasourceError` |
+| `filters` | — | Alertmanager matchers appended to the request, one per entry (`team=infra`, `env!~"staging\|dev"`) |
+| `severity_label` | `severity` | Label carrying the severity (`level`, `priority`…); always hidden from the chips |
+| `hidden_labels` | `alertname, grafana_folder, severity` | Labels not shown as chips (`__*` labels are always hidden) |
+| `critical_color` | `#ff5c5c` | Color for critical alerts (bar tint, badges, card borders) |
+| `warning_color` | `#f1c232` | Color for warning alerts |
+| `notify_new_alerts` | `true` | Desktop notification for every new alert |
+| `notify_min_severity` | `warning` | Minimum severity to notify (`critical`, `warning`, `info`, all) |
+| `show_silence_button` | `true` | Show the *Silence* action on each card |
+| `silence_duration` | 120 min | Length of the silences created from the panel |
+| `allow_insecure_tls` | `false` | Accept self-signed certificates |
 
-Réglages propres au widget de barre (Réglages → Barre → widget *Grafana Alerts*) :
+Bar widget settings (Settings → Bar → *Grafana Alerts* widget):
 
-| Réglage | Défaut | Rôle |
+| Setting | Default | Description |
 |---|---|---|
-| `glyph` | `alert-triangle` | Icône affichée dans la barre |
-| `hide_when_zero` | `false` | Masque le widget quand aucune alerte n'est active |
+| `glyph` | `alert-triangle` | Icon shown in the bar |
+| `hide_when_zero` | `false` | Hide the widget when nothing is firing |
 
-Créer le token : Grafana → Administration → Users and access → Service accounts →
-*Add service account* (rôle Viewer) → *Add service account token*.
-Pour poser des silences depuis le panneau, le service account doit avoir le rôle **Editor**
-(ou la permission `alert.silences:create`) ; sinon le panneau affiche l'erreur 403 et rien
-d'autre ne change.
+### Creating the token
+
+Grafana → Administration → Users and access → Service accounts → *Add service account*
+(role Viewer) → *Add service account token*.
+
+To create silences from the panel, the service account needs the **Editor** role (or the
+`alert.silences:create` permission); otherwise the panel shows the 403 error on the card
+and nothing else changes.
+
+The token is stored in Noctalia's settings (`~/.local/state/noctalia/settings.toml`), not
+in this repository.
 
 ## Notifications
 
-Au premier fetch après démarrage, les alertes déjà actives servent de référence et ne sont
-pas notifiées. Ensuite, chaque nouvelle empreinte d'alerte de sévérité ≥ `notify_min_severity`
-déclenche un `notify-send` (urgence `critical` pour les critiques). Au-delà de 3 nouvelles
-alertes dans un même fetch, une seule notification récapitulative est envoyée.
+The first fetch after startup is a baseline: alerts already firing are not notified.
+After that, every new alert fingerprint with a severity ≥ `notify_min_severity` triggers a
+`notify-send` (urgency `critical` for critical alerts). More than 3 new alerts in one
+fetch → a single summary notification.
 
 ## Silences
 
-*Silence 2 h* → *Confirmer* (6 s pour cliquer) → `POST /api/alertmanager/grafana/api/v2/silences`
-avec un matcher `=` par label de l'alerte (hors `__grafana_*`), comme le bouton *Silence*
-de Grafana. La liste est rafraîchie juste après : l'alerte disparaît puisque la requête
-exclut les alertes silencées.
+*Silence 2 h* → *Confirm* (6 seconds to click) → `POST /api/alertmanager/grafana/api/v2/silences`
+with one `=` matcher per label of the alert (except the `__grafana_*` routing labels),
+like Grafana's *Silence* button. The list refreshes right after: the alert disappears since
+the request excludes silenced alerts.
 
-Le token est stocké dans les réglages Noctalia (`~/.local/state/noctalia/settings.toml`),
-pas dans ce dépôt.
+## Severity mapping
 
-## Structure
+Grafana has no fixed vocabulary, so the `severity` label (or the one set in
+`severity_label`) is bucketed:
 
-| Fichier | Rôle |
+| Bucket | Values |
 |---|---|
-| `plugin.toml` | Manifeste : réglages, entrées (service, widget, panneau) |
-| `service.luau` | Service de fond : appels HTTP (alertes, silences), normalisation, tri, notifications, état partagé |
-| `bar.luau` | Widget de barre : icône + compteur, teinte selon sévérité, clic → panneau |
-| `panel.luau` | Panneau : filtre par sévérité, cartes d'alertes (badge, résumé, tags), copie et silence |
-| `translations/` | Textes en/fr |
+| critical | `critical`, `crit`, `error`, `fatal`, `emergency`, `p1` |
+| warning | `warning`, `warn`, `high`, `major`, `p2` |
+| info | `info`, `informational`, `notice`, `low`, `minor` |
+| other | anything else |
 
-Sévérités reconnues (label `severity`) : `critical` (+ crit/error/fatal/p1),
-`warning` (+ warn/high/major/p2), `info` (+ notice/low/minor) ; le reste est « autre ».
+Alerts are sorted by severity, then start time (newest first).
 
-## Développement
+## Layout
+
+| File | Role |
+|---|---|
+| `plugin.toml` | Manifest: settings, entries (service, widget, panel) |
+| `service.luau` | Background service: HTTP calls (alerts, silences), normalisation, sorting, notifications, shared state |
+| `bar.luau` | Bar widget: glyph + counter, severity tint, click → panel, right click → settings |
+| `panel.luau` | Panel: severity filter, alert cards (badge, summary, chips), copy and silence actions |
+| `translations/` | English and French strings |
+
+## Development
+
+The plugin hot-reloads `.luau` files; manifest changes need a plugin disable/enable.
 
 ```sh
-noctalia plugins lint .          # vérifie réglages déclarés ↔ code
-noctalia msg plugins list        # état des plugins sur l'instance
-tail -f ~/.cache/noctalia/noctalia.log | grep grafana-alerts
+noctalia plugins lint .                                   # declared settings ↔ code
+noctalia msg plugins list                                 # plugin state on the running instance
+tail -f ~/.cache/noctalia/noctalia.log | grep grafana     # logs
 ```
 
-Licence MIT.
+## What it touches
+
+- **Network**: `GET …/api/alertmanager/grafana/api/v2/alerts` on every refresh,
+  `POST …/api/alertmanager/grafana/api/v2/silences` when you confirm a silence. Nothing
+  else; the token is only ever sent to the configured Grafana URL.
+- **Processes**: `notify-send` for notifications, `xdg-open` when you click an alert
+  name.
+- **Files**: none written by the plugin; settings live in Noctalia's own settings file.
+
+## License
+
+MIT.
