@@ -48,8 +48,8 @@ type = "fxthiry/grafana-alerts:bar"
 
 ![Bar widget](screenshots/bar.png)
 
-It shows a glyph and the number of firing alerts, tinted by the worst severity
-(critical / warning / all clear). The tooltip gives the per-severity breakdown and the
+It shows the number of firing alerts; glyph and tint follow the worst severity
+(octagon / triangle / bell, check mark when all clear). The tooltip gives the per-severity breakdown and the
 last error, if any. Left click opens the panel, right click opens the settings.
 
 **Panel** — click the widget, or:
@@ -99,7 +99,8 @@ Bar widget (Settings → Bar → *Grafana Alerts* widget):
 
 | Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `glyph` | `glyph` | `alert-triangle` | Icon shown in the bar. |
+| `glyph_by_severity` | `bool` | `true` | Octagon for critical, triangle for warning, bell otherwise; check mark when nothing is firing. |
+| `glyph` | `glyph` | `alert-triangle` | Icon shown while loading, on error, and always when `glyph_by_severity` is off. |
 | `hide_when_zero` | `bool` | `false` | Hide the widget when nothing is firing. |
 
 ## Notes

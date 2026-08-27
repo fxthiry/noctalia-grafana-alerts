@@ -74,7 +74,8 @@
       "description": "Accept self-signed certificates."
     },
     "glyph": {
-      "label": "Bar glyph"
+      "label": "Bar glyph",
+      "description": "Icon shown while loading, on error, and always when the glyph does not follow severity."
     },
     "hide_when_zero": {
       "label": "Hide when empty",
@@ -112,6 +113,10 @@
     "silence_duration": {
       "label": "Silence duration (minutes)",
       "description": "Length of the silences created from the panel."
+    },
+    "glyph_by_severity": {
+      "label": "Glyph follows severity",
+      "description": "Octagon for critical, triangle for warning, bell otherwise; check mark when nothing is firing."
     }
   },
   "silence": {

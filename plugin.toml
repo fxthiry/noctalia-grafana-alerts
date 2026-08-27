@@ -12,7 +12,7 @@ author = "fxthiry"
 license = "MIT"
 # Registry vocabulary only (surfaces + purpose), see PUBLISHING.md.
 tags = ["bar", "panel", "service", "indicator", "network", "system"]
-icon = "alert-triangle"
+icon = "activity-heartbeat"
 description = "Firing Grafana alerts in your bar: severity-tinted count, alert panel with labels, desktop notifications, silences."
 # External commands the plugin shells out to (informational in the store).
 dependencies = ["notify-send", "xdg-open"]
@@ -145,9 +145,17 @@ id = "bar"
 entry = "bar.luau"
 
   [[widget.setting]]
+  key = "glyph_by_severity"
+  type = "bool"
+  label_key = "settings.glyph_by_severity.label"
+  description_key = "settings.glyph_by_severity.description"
+  default = true
+
+  [[widget.setting]]
   key = "glyph"
   type = "glyph"
   label_key = "settings.glyph.label"
+  description_key = "settings.glyph.description"
   default = "alert-triangle"
 
   [[widget.setting]]
