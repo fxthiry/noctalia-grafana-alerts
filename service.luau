@@ -35,9 +35,14 @@ local tr = noctalia.tr
 local generation = 0
 local lastRefreshNonce = noctalia.state.get("refresh_requested") or 0
 local lastSilenceNonce = (noctalia.state.get("silence_requested") or {}).nonce or 0
--- Fingerprints of the last successful fetch. nil until the first one: that
--- fetch is the baseline and never notifies (a restart is not "new alerts").
-local knownIds = nil
+-- Alerts of the last successful fetch, by fingerprint. nil until the first one:
+-- that fetch is the baseline and never notifies (a restart is not "new alerts").
+local known = nil
+-- Set after a config change: the next fetch re-baselines silently (new filters
+-- or severity label make alerts appear/vanish without anything really changing).
+local rebaseline = false
+-- Fingerprints silenced from the panel: their disappearance is not a resolution.
+local silencedIds = {}
 local notifySendAvailable = nil
 
 local function baseUrl()
@@ -290,30 +295,96 @@ local function shellQuote(s)
   return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
 end
 
-local function sendNotification(urgency, title, body)
+local function sendNotification(urgency, icon, title, body)
   noctalia.log(`grafana-alerts: notify [{urgency}] {title}`)
-  noctalia.runAsync(`notify-send -a {shellQuote(tr("title"))} -u {urgency} -i dialog-warning {shellQuote(title)} {shellQuote(body)}`)
+  noctalia.runAsync(`notify-send -a {shellQuote(tr("title"))} -u {urgency} -i {icon} {shellQuote(title)} {shellQuote(body)}`)
 end
 
-local function notifyNewAlerts(alerts)
-  local ids = {}
-  for _, alert in ipairs(alerts) do
-    ids[alert.id] = true
+local function alertBody(alert)
+  if alert.summary ~= "" then
+    return alert.summary
   end
-  local baseline = knownIds
-  knownIds = ids
-  if baseline == nil or noctalia.getConfig("notify_new_alerts") == false then
+  return alert.description ~= "" and alert.description or alert.folder
+end
+
+local function worstSeverity(list)
+  local worst = "other"
+  for _, alert in ipairs(list) do
+    if SEVERITY_RANK[alert.severity] < SEVERITY_RANK[worst] then
+      worst = alert.severity
+    end
+  end
+  return worst
+end
+
+-- Up to MAX_INDIVIDUAL_NOTIFICATIONS one-per-alert notifications, else one summary.
+local function notifyFiring(list)
+  if #list <= MAX_INDIVIDUAL_NOTIFICATIONS then
+    for _, alert in ipairs(list) do
+      local title = alert.severityLabel ~= "" and `{alert.severityLabel}: {alert.name}` or alert.name
+      sendNotification(alert.severity == "critical" and "critical" or "normal", "dialog-warning", title, alertBody(alert))
+    end
+    return
+  end
+  local names = {}
+  for _, alert in ipairs(list) do
+    table.insert(names, alert.name)
+  end
+  sendNotification(worstSeverity(list) == "critical" and "critical" or "normal", "dialog-warning",
+    tr("notify.summary_title", { count = tostring(#list) }), table.concat(names, "\n"))
+end
+
+local function notifyResolved(list)
+  if #list <= MAX_INDIVIDUAL_NOTIFICATIONS then
+    for _, alert in ipairs(list) do
+      sendNotification("low", "dialog-information", tr("notify.resolved_title", { name = alert.name }), alertBody(alert))
+    end
+    return
+  end
+  local names = {}
+  for _, alert in ipairs(list) do
+    table.insert(names, alert.name)
+  end
+  sendNotification("low", "dialog-information",
+    tr("notify.resolved_summary_title", { count = tostring(#list) }), table.concat(names, "\n"))
+end
+
+-- Diff the fetch against the previous one: alerts that appeared start firing,
+-- alerts that vanished are resolved (unless we silenced them ourselves).
+local function notifyChanges(alerts)
+  local current = {}
+  for _, alert in ipairs(alerts) do
+    current[alert.id] = alert
+  end
+  local baseline = known
+  known = current
+  if baseline == nil or rebaseline then
+    rebaseline = false
     return
   end
 
   local maxRank = SEVERITY_RANK[normalizeSeverity(noctalia.getConfig("notify_min_severity"))] or SEVERITY_RANK.warning
-  local fresh = {}
-  for _, alert in ipairs(alerts) do
-    if not baseline[alert.id] and SEVERITY_RANK[alert.severity] <= maxRank then
-      table.insert(fresh, alert)
+  local fresh, resolved = {}, {}
+  if noctalia.getConfig("notify_new_alerts") ~= false then
+    for _, alert in ipairs(alerts) do
+      if not baseline[alert.id] and SEVERITY_RANK[alert.severity] <= maxRank then
+        table.insert(fresh, alert)
+      end
     end
   end
-  if #fresh == 0 then
+  for id, alert in pairs(baseline) do
+    if current[id] == nil then
+      if silencedIds[id] then
+        silencedIds[id] = nil
+      elseif noctalia.getConfig("notify_resolved") ~= false and SEVERITY_RANK[alert.severity] <= maxRank then
+        table.insert(resolved, alert)
+      end
+    end
+  end
+  table.sort(resolved, function(a, b)
+    return a.name < b.name
+  end)
+  if #fresh == 0 and #resolved == 0 then
     return
   end
 
@@ -324,27 +395,12 @@ local function notifyNewAlerts(alerts)
     noctalia.log("grafana-alerts: notify-send not found, skipping desktop notification")
     return
   end
-
-  if #fresh <= MAX_INDIVIDUAL_NOTIFICATIONS then
-    for _, alert in ipairs(fresh) do
-      local urgency = alert.severity == "critical" and "critical" or "normal"
-      local title = alert.severityLabel ~= "" and `{alert.severityLabel}: {alert.name}` or alert.name
-      local body = alert.summary ~= "" and alert.summary or (alert.description ~= "" and alert.description or alert.folder)
-      sendNotification(urgency, title, body)
-    end
-    return
+  if #fresh > 0 then
+    notifyFiring(fresh)
   end
-
-  local names = {}
-  local worst = "other"
-  for _, alert in ipairs(fresh) do
-    table.insert(names, alert.name)
-    if SEVERITY_RANK[alert.severity] < SEVERITY_RANK[worst] then
-      worst = alert.severity
-    end
+  if #resolved > 0 then
+    notifyResolved(resolved)
   end
-  sendNotification(worst == "critical" and "critical" or "normal",
-    tr("notify.summary_title", { count = tostring(#fresh) }), table.concat(names, "\n"))
 end
 
 -- Fetch ------------------------------------------------------------------------
@@ -402,7 +458,7 @@ local function startFetch()
         return a.name < b.name
       end)
       publish(alerts, "ok", "", true)
-      notifyNewAlerts(alerts)
+      notifyChanges(alerts)
     end)
     if not ok then
       noctalia.log(`grafana-alerts: callback error: {tostring(err)}`)
@@ -471,6 +527,7 @@ local function silenceAlert(nonce, id)
         return
       end
       noctalia.log(`grafana-alerts: silenced {alert.name} for {minutes} min (silence {tostring(data.silenceID)})`)
+      silencedIds[id] = true -- it will vanish from the list: not a resolution
       publishSilence(nonce, id, "ok", "")
       startFetch() -- the alert leaves the active&silenced=false list
     end)
@@ -506,6 +563,7 @@ end
 
 function onConfigChanged()
   publishColors()
+  rebaseline = true
   startFetch()
 end
 

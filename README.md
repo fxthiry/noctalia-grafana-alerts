@@ -70,8 +70,10 @@ The badges in the header filter the list by severity (click again, or the total,
 clear). The refresh button forces a fetch; the gear opens the settings.
 
 **Desktop notifications** — when a new alert starts firing you get a `notify-send`
-notification (urgency `critical` for critical alerts). The first fetch after startup is a
-baseline and never notifies; more than 3 new alerts in one fetch produce a single summary
+notification (urgency `critical` for critical alerts), and a low-urgency *Resolved* one
+when a known alert stops firing — but not when you silenced it yourself. The first fetch
+after startup (and the first one after a settings change) is a baseline and never
+notifies; more than 3 changes of a kind in one fetch produce a single summary
 notification.
 
 ## Settings
@@ -90,7 +92,8 @@ Settings → Plugins → Grafana Alerts:
 | `critical_color` | `color` | `#ff5c5c` | Color for critical alerts: bar tint, badges, card borders. |
 | `warning_color` | `color` | `#f1c232` | Color for warning alerts. |
 | `notify_new_alerts` | `bool` | `true` | Desktop notification for every new alert. |
-| `notify_min_severity` | `select` | `warning` | Minimum severity to notify: `critical`, `warning`, `info` or all. |
+| `notify_min_severity` | `select` | `warning` | Minimum severity to notify (firing and resolved): `critical`, `warning`, `info` or all. |
+| `notify_resolved` | `bool` | `true` | Low-urgency notification when a known alert stops firing (not when you silence it). |
 | `show_silence_button` | `bool` | `true` | Show the *Silence* action on each card. |
 | `silence_duration` | `int` | `120` | Length of the silences created from the panel, in minutes. |
 | `allow_insecure_tls` | `bool` | `false` | Accept self-signed certificates. |

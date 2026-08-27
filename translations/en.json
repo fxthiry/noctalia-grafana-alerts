@@ -117,6 +117,10 @@
     "glyph_by_severity": {
       "label": "Glyph follows severity",
       "description": "Octagon for critical, triangle for warning, bell otherwise; check mark when nothing is firing."
+    },
+    "notify_resolved": {
+      "label": "Notify when resolved",
+      "description": "Send a low-urgency notification when a known alert stops firing (not when you silence it)."
     }
   },
   "silence": {
@@ -125,6 +129,8 @@
     "comment": "Silenced from Noctalia for {minutes} min"
   },
   "notify": {
-    "summary_title": "{count} new Grafana alerts"
+    "summary_title": "{count} new Grafana alerts",
+    "resolved_title": "Resolved: {name}",
+    "resolved_summary_title": "{count} Grafana alerts resolved"
   }
 }

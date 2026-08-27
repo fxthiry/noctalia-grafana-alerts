@@ -6,7 +6,7 @@
 
 id = "fxthiry/grafana-alerts"
 name = "Grafana Alerts"
-version = "0.2.0"
+version = "0.3.0"
 plugin_api = 19
 author = "fxthiry"
 license = "MIT"
@@ -97,6 +97,13 @@ default = "warning"
   [[setting.options]]
   value = "other"
   label_key = "settings.notify_min_severity.all"
+
+[[setting]]
+key = "notify_resolved"
+type = "bool"
+label_key = "settings.notify_resolved.label"
+description_key = "settings.notify_resolved.description"
+default = true
 
 [[setting]]
 key = "show_silence_button"
