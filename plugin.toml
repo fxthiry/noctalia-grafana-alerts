@@ -10,9 +10,12 @@ version = "0.2.0"
 plugin_api = 19
 author = "fxthiry"
 license = "MIT"
-tags = ["bar", "monitoring", "notifications", "panel", "service"]
+# Registry vocabulary only (surfaces + purpose), see PUBLISHING.md.
+tags = ["bar", "panel", "service", "indicator", "network", "system"]
 icon = "alert-triangle"
-description = "Firing Grafana alerts in your bar: count tinted by severity, click for the list with labels, desktop notifications, one-click silences."
+description = "Firing Grafana alerts in your bar: severity-tinted count, alert panel with labels, desktop notifications, silences."
+# External commands the plugin shells out to (informational in the store).
+dependencies = ["notify-send", "xdg-open"]
 
 [[setting]]
 key = "grafana_url"

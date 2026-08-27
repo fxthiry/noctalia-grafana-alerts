@@ -1,2 +1,4 @@
 .DS_Store
 *.swp
+# Editor type definitions for luau-lsp, fetched from official-plugins (see PUBLISHING.md).
+noctalia.d.luau
