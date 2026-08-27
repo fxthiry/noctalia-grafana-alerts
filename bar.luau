@@ -10,8 +10,8 @@ local counts = noctalia.state.get("counts")
 local fetchStatus = noctalia.state.get("fetch_status") or "loading"
 
 local function countText()
-  if fetchStatus == "error" and counts == nil then
-    return "!"
+  if fetchStatus == "error" and (counts == nil or counts.total == 0) then
+    return "!" -- not configured / unreachable: no number to trust
   end
   if counts ~= nil then
     return tostring(counts.total)
