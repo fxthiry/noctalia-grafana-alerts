@@ -1,7 +1,9 @@
 {
   "title": "Grafana alerts",
   "bar": {
-    "tooltip": "{total} firing alert(s) — {critical} critical, {warning} warning"
+    "tooltip": "{total} firing alert(s) — {critical} critical, {warning} warning",
+    "offline": "off",
+    "tooltip_offline": "Grafana unreachable since {since} (off-site? VPN down?) — last data {last}"
   },
   "service": {
     "unnamed": "(unnamed alert)"
@@ -46,7 +48,8 @@
     "duration": {
       "hours": "{count} h",
       "minutes": "{count} min"
-    }
+    },
+    "offline_banner": "Offline since {since} — Grafana unreachable (off-site, VPN down?). Showing the last alerts from {last}."
   },
   "settings": {
     "grafana_url": {

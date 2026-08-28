@@ -5,8 +5,10 @@
 -- time, summary, label chips, then copy / silence actions.
 
 local MAX_ROWS = 100
-local AGE_REFRESH_MS = 30000 -- keep "x min ago" honest while the panel stays open
-local FAST_TICK_MS = 1000 -- while a confirmation or a "copied" hint is pending
+-- The panel gets a 1 s tick (panel.setWantsSecondTicks); noctalia.setUpdateInterval
+-- has no effect on a panel. Ages are refreshed every AGE_REFRESH_MS, the
+-- transient hints (confirm window, "copied") expire on the second tick.
+local AGE_REFRESH_MS = 30000
 local CONFIRM_WINDOW_MS = 6000 -- second click on "silence" must happen within this
 local HINT_MS = 2000
 -- ui.row has no wrap: chips are chunked into rows by estimated width (panel is 720 wide).
@@ -27,7 +29,10 @@ local counts = nil
 local colors = nil
 local fetchStatus = "loading"
 local errorMessage = ""
+local errorKind = ""
+local offlineSinceText = ""
 local lastUpdatedText = ""
+local lastRenderMs = 0
 local silenceStatus = nil -- { nonce, id, status, message } from the service
 local isOpen = false
 
@@ -45,6 +50,8 @@ local function syncFromState()
   colors = noctalia.state.get("severity_colors")
   fetchStatus = noctalia.state.get("fetch_status") or "loading"
   errorMessage = noctalia.state.get("error_message") or ""
+  errorKind = noctalia.state.get("error_kind") or ""
+  offlineSinceText = noctalia.state.get("offline_since_text") or ""
   lastUpdatedText = noctalia.state.get("last_updated_text") or ""
   silenceStatus = noctalia.state.get("silence_status")
   if type(silenceStatus) == "table" and silenceStatus.status == "ok" and silenceStatus.id then
@@ -106,7 +113,7 @@ local function copyAlert(alert)
     table.insert(lines, `{key}={alert.labels[key]}`)
   end
   table.insert(lines, alert.url)
-  noctalia.copyToClipboard(table.concat(lines, "\n"))
+  noctalia.copyToClipboard(table.concat(lines, "\n"), "text/plain")
   copiedHint = { id = alert.id, untilMs = noctalia.nowMs() + HINT_MS }
 end
 
@@ -376,6 +383,18 @@ local function body()
         ui.label({ text = tr("panel.loading"), color = "on_surface_variant" }),
       })
     end
+    if fetchStatus == "error" and errorKind == "network" then
+      return ui.column(CENTERED, {
+        ui.glyph({ name = "cloud-off", size = 32, color = "on_surface_variant" }),
+        ui.label({
+          text = tr("panel.offline_banner", { since = offlineSinceText, last = lastUpdatedText ~= "" and lastUpdatedText or "—" }),
+          color = "on_surface_variant",
+          maxLines = 4,
+          textAlign = "center",
+        }),
+        ui.button({ text = tr("panel.retry"), variant = "ghost", onClick = requestRefresh }),
+      })
+    end
     if fetchStatus == "error" then
       return ui.column(CENTERED, {
         ui.label({ text = tr("panel.error_title"), fontWeight = "bold", color = "error" }),
@@ -460,7 +479,6 @@ render = function()
   if copiedHint and copiedHint.untilMs <= nowMs then
     copiedHint = nil
   end
-  noctalia.setUpdateInterval((pendingSilence or copiedHint) and FAST_TICK_MS or AGE_REFRESH_MS)
 
   local titleRow = {
     ui.glyph({ name = "bell", size = 20, color = "primary" }),
@@ -495,13 +513,25 @@ render = function()
     }),
   }
 
-  -- Stale data: keep showing the last good list but warn.
-  if errorMessage ~= "" and #alerts > 0 then
+  -- Stale data: keep showing the last good list. Unreachable (off-site, VPN
+  -- down) is a quiet banner; any other error is red.
+  if fetchStatus == "error" and errorKind == "network" and #alerts > 0 then
+    table.insert(children, ui.row({ key = "offline", gap = 8, align = "center", paddingH = 10, paddingV = 6, radius = 8, fill = "surface_variant/0.3" }, {
+      ui.glyph({ name = "cloud-off", size = 14, color = "on_surface_variant" }),
+      ui.label({
+        text = tr("panel.offline_banner", { since = offlineSinceText, last = lastUpdatedText ~= "" and lastUpdatedText or "—" }),
+        fontSize = 12,
+        color = "on_surface_variant",
+        maxLines = 2,
+      }),
+    }))
+  elseif errorMessage ~= "" and #alerts > 0 then
     table.insert(children, ui.label({ text = errorMessage, fontSize = 11, color = "error", maxLines = 2 }))
   end
 
   table.insert(children, body())
   panel.render(ui.column({ flexGrow = 1, gap = 12, align = "stretch" }, children))
+  lastRenderMs = nowMs
 end
 
 for _, key in ipairs({ "fetch_status", "severity_colors", "silence_status" }) do
@@ -511,8 +541,14 @@ for _, key in ipairs({ "fetch_status", "severity_colors", "silence_status" }) do
   end)
 end
 
+-- 1 s panel tick: expire the transient hints, refresh the ages every AGE_REFRESH_MS.
 function update()
-  render() -- no-op while closed; refreshes ages and expires the transient hints while open
+  if not isOpen then
+    return
+  end
+  if pendingSilence or copiedHint or noctalia.nowMs() - lastRenderMs >= AGE_REFRESH_MS then
+    render()
+  end
 end
 
 function onOpen(_context)
@@ -526,3 +562,5 @@ function onClose()
   pendingSilence = nil
   copiedHint = nil
 end
+
+panel.setWantsSecondTicks(true)

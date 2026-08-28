@@ -10,6 +10,10 @@
 --   counts             { total, critical, warning, info, other }
 --   fetch_status       "loading" | "ok" | "error" (published last)
 --   error_message      human readable error ("" when none)
+--   error_kind         "network" (Grafana unreachable: laptop off-site, VPN down)
+--                      | "other" | "" — the UI shows network errors as a quiet
+--                      offline state rather than an alarm
+--   offline_since_text "%H:%M" of the first failed fetch of the current outage ("")
 --   last_updated_text  "%H:%M" of the last successful fetch
 --   severity_colors    { critical, warning, info, other } — configured colors
 --                      (hex) or theme role tokens, single source of truth for
@@ -28,6 +32,9 @@ local DEFAULT_COLORS = { critical = "#ff5c5c", warning = "#f1c232" }
 -- Above this many new alerts in one fetch, send a single summary notification.
 local MAX_INDIVIDUAL_NOTIFICATIONS = 3
 local DEFAULT_SILENCE_MINUTES = 120
+-- Back online after an outage longer than this: the first fetch re-baselines
+-- silently instead of notifying every change that happened meanwhile.
+local REBASELINE_AFTER_OUTAGE_S = 600
 
 local trim = noctalia.string.trim
 local tr = noctalia.tr
@@ -44,6 +51,8 @@ local rebaseline = false
 -- Fingerprints silenced from the panel: their disappearance is not a resolution.
 local silencedIds = {}
 local notifySendAvailable = nil
+-- First failed fetch of the current outage (unix seconds), nil while online.
+local offlineSince = nil
 
 local function baseUrl()
   local url = trim(noctalia.getConfig("grafana_url") or "")
@@ -248,13 +257,15 @@ local function computeCounts(alerts)
   return counts
 end
 
-local function publish(alerts, status, errorMessage, updated)
+local function publish(alerts, status, errorMessage, updated, errorKind)
   noctalia.state.set("alerts", alerts)
   noctalia.state.set("counts", computeCounts(alerts))
   if updated then
     noctalia.state.set("last_updated_text", noctalia.formatTime("%H:%M"))
   end
   noctalia.state.set("error_message", errorMessage or "")
+  noctalia.state.set("error_kind", status == "error" and (errorKind or "other") or "")
+  noctalia.state.set("offline_since_text", offlineSince and noctalia.formatTime("%H:%M", offlineSince) or "")
   noctalia.state.set("fetch_status", status)
 end
 
@@ -262,17 +273,18 @@ local function previousAlerts()
   return noctalia.state.get("alerts") or {}
 end
 
--- Shared HTTP error mapping; returns (decodedBody, nil) or (nil, message).
+-- Shared HTTP error mapping; returns (decodedBody, nil, nil) or (nil, message, kind)
+-- where kind is "network" (no answer at all) or "other".
 local function classify(res, forbiddenKey)
   if type(res) ~= "table" then
-    return nil, tr("error.network")
+    return nil, tr("error.network"), "network"
   end
   if res.status == 401 or res.status == 403 then
-    return nil, tr(forbiddenKey or "error.unauthorized")
+    return nil, tr(forbiddenKey or "error.unauthorized"), "other"
   end
   if res.status == 0 or res.status == nil then
     local body = trim(res.body or "")
-    return nil, body ~= "" and body or tr("error.network")
+    return nil, body ~= "" and body or tr("error.network"), "network"
   end
   if not res.ok or res.status < 200 or res.status >= 300 then
     local detail = ""
@@ -280,13 +292,13 @@ local function classify(res, forbiddenKey)
     if type(decoded) == "table" and type(decoded.message) == "string" then
       detail = " — " .. decoded.message
     end
-    return nil, tr("error.http", { status = tostring(res.status) }) .. detail
+    return nil, tr("error.http", { status = tostring(res.status) }) .. detail, "other"
   end
   local decoded = noctalia.json.decode(res.body or "")
   if type(decoded) ~= "table" then
-    return nil, tr("error.parse")
+    return nil, tr("error.parse"), "other"
   end
-  return decoded, nil
+  return decoded, nil, nil
 end
 
 -- Desktop notifications --------------------------------------------------------
@@ -427,11 +439,27 @@ local function startFetch()
       return -- superseded by a newer fetch
     end
     local ok, err = pcall(function()
-      local data, message = classify(res)
+      local data, message, kind = classify(res)
       if data == nil then
-        noctalia.log(`grafana-alerts: fetch failed: {message}`)
-        publish(previousAlerts(), "error", message, false)
+        if kind == "network" then
+          -- Off-site laptop / VPN down: log once per outage, not every fetch.
+          if offlineSince == nil then
+            offlineSince = nowSeconds()
+            noctalia.log(`grafana-alerts: Grafana unreachable ({message}), going offline`)
+          end
+        else
+          noctalia.log(`grafana-alerts: fetch failed: {message}`)
+        end
+        publish(previousAlerts(), "error", message, false, kind)
         return
+      end
+      if offlineSince ~= nil then
+        local outage = nowSeconds() - offlineSince
+        offlineSince = nil
+        if outage > REBASELINE_AFTER_OUTAGE_S then
+          rebaseline = true -- what fired or resolved during a long outage is history, not news
+        end
+        noctalia.log(`grafana-alerts: back online after {outage}s{rebaseline and ", re-baselining" or ""}`)
       end
 
       local hidden = hiddenLabelSet()
@@ -462,12 +490,12 @@ local function startFetch()
     end)
     if not ok then
       noctalia.log(`grafana-alerts: callback error: {tostring(err)}`)
-      publish(previousAlerts(), "error", tostring(err), false)
+      publish(previousAlerts(), "error", tostring(err), false, "other")
     end
   end)
 
   if not started then
-    publish(previousAlerts(), "error", tr("error.queue"), false)
+    publish(previousAlerts(), "error", tr("error.queue"), false, "other")
   end
 end
 

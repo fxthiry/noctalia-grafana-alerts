@@ -76,6 +76,14 @@ after startup (and the first one after a settings change) is a baseline and neve
 notifies; more than 3 changes of a kind in one fetch produce a single summary
 notification.
 
+**Offline** — when Grafana cannot be reached at all (laptop off-site, VPN down), this is
+not treated as an alarm: the widget turns grey with a `cloud-off` glyph and the text
+`off` (tooltip: since when, and the time of the last data), and the panel keeps the last
+alert list under a grey "offline since…" banner. The service keeps retrying at every
+interval and logs one line per outage. When Grafana is back after more than 10 minutes,
+the first fetch is a new baseline: no burst of notifications for what fired or resolved
+meanwhile. Other errors (401, HTTP 5xx, bad response) stay red.
+
 ## Settings
 
 Settings → Plugins → Grafana Alerts:
@@ -125,7 +133,13 @@ Bar widget (Settings → Bar → *Grafana Alerts* widget):
 
 ## Development
 
-`.luau` files hot-reload; manifest changes need a plugin disable/enable.
+`.luau` files hot-reload, but only in live runtimes: a closed panel keeps the old code
+until the plugin is restarted, as does any manifest change. Prefer restarting Noctalia
+over `plugins disable` + `enable`: on Noctalia 5.0.0 beta.9, re-enabling a plugin and
+opening its panel while it re-renders can segfault the shell. From an SSH session,
+`noctalia msg` needs `WAYLAND_DISPLAY` set to the instance's display (e.g. `wayland-1`).
+`noctalia.setUpdateInterval` has no effect on a panel: periodic work there goes through
+`panel.setWantsSecondTicks(true)` and `update()` (once per second).
 
 ```sh
 noctalia plugins lint .          # declared settings ↔ code

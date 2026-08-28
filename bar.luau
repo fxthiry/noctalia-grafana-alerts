@@ -17,7 +17,16 @@ local tr = noctalia.tr
 local counts = noctalia.state.get("counts")
 local fetchStatus = noctalia.state.get("fetch_status") or "loading"
 local errorMessage = noctalia.state.get("error_message") or ""
+local errorKind = noctalia.state.get("error_kind") or ""
+local offlineSinceText = noctalia.state.get("offline_since_text") or ""
+local lastUpdatedText = noctalia.state.get("last_updated_text") or ""
 local colors = noctalia.state.get("severity_colors")
+local OFFLINE_GLYPH = "cloud-off"
+
+-- Grafana unreachable (laptop off-site, VPN down): a quiet state, not an alarm.
+local function isOffline()
+  return fetchStatus == "error" and errorKind == "network"
+end
 
 local function severityColor(severity)
   local color = colors and colors[severity]
@@ -28,6 +37,9 @@ local function severityColor(severity)
 end
 
 local function countText()
+  if isOffline() then
+    return tr("bar.offline")
+  end
   if fetchStatus == "error" and (counts == nil or counts.total == 0) then
     return "!" -- not configured / unreachable: no number to trust
   end
@@ -38,6 +50,9 @@ local function countText()
 end
 
 local function tint()
+  if isOffline() then
+    return "on_surface_variant"
+  end
   if fetchStatus == "error" then
     return "error"
   end
@@ -58,6 +73,9 @@ end
 
 local function tooltipText()
   local parts = {}
+  if isOffline() then
+    table.insert(parts, tr("bar.tooltip_offline", { since = offlineSinceText, last = lastUpdatedText ~= "" and lastUpdatedText or "—" }))
+  end
   if counts ~= nil then
     table.insert(parts, tr("bar.tooltip", {
       total = tostring(counts.total),
@@ -66,7 +84,7 @@ local function tooltipText()
     }))
   end
   -- Fetch failed: say why, even when stale counts are still displayed.
-  if fetchStatus == "error" and errorMessage ~= "" then
+  if fetchStatus == "error" and errorMessage ~= "" and not isOffline() then
     table.insert(parts, errorMessage)
   end
   return table.concat(parts, "\n")
@@ -83,6 +101,9 @@ end
 -- All clear → check mark; otherwise the worst firing severity picks the glyph,
 -- unless the user turned that off (then the configured glyph is used as is).
 local function glyphName()
+  if isOffline() then
+    return OFFLINE_GLYPH
+  end
   if fetchStatus == "ok" and counts ~= nil and counts.total == 0 then
     return "circle-check"
   end
@@ -133,6 +154,9 @@ end)
 noctalia.state.watch("fetch_status", function(value)
   fetchStatus = value
   errorMessage = noctalia.state.get("error_message") or ""
+  errorKind = noctalia.state.get("error_kind") or ""
+  offlineSinceText = noctalia.state.get("offline_since_text") or ""
+  lastUpdatedText = noctalia.state.get("last_updated_text") or ""
   render()
 end)
 
