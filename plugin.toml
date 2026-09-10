@@ -6,7 +6,7 @@
 
 id = "fxthiry/grafana-alerts"
 name = "Grafana Alerts"
-version = "0.4.0"
+version = "0.4.1"
 plugin_api = 19
 author = "fxthiry"
 license = "MIT"
@@ -134,6 +134,13 @@ type = "color"
 label_key = "settings.warning_color.label"
 description_key = "settings.warning_color.description"
 default = "#f1c232"
+
+[[setting]]
+key = "ok_color"
+type = "color"
+label_key = "settings.ok_color.label"
+description_key = "settings.ok_color.description"
+default = "#3fb950"
 
 [[setting]]
 key = "allow_insecure_tls"

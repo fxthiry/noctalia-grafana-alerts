@@ -15,7 +15,7 @@
 --                      offline state rather than an alarm
 --   offline_since_text "%H:%M" of the first failed fetch of the current outage ("")
 --   last_updated_text  "%H:%M" of the last successful fetch
---   severity_colors    { critical, warning, info, other } — configured colors
+--   severity_colors    { critical, warning, info, other, ok } — configured colors
 --                      (hex) or theme role tokens, single source of truth for
 --                      the bar widget and the panel
 --   silence_status     { nonce, id, status = "pending"|"ok"|"error", message }
@@ -28,7 +28,7 @@ local ALERTS_PATH = "/api/alertmanager/grafana/api/v2/alerts?active=true&silence
 local SILENCES_PATH = "/api/alertmanager/grafana/api/v2/silences"
 local SEVERITY_RANK = { critical = 0, warning = 1, info = 2, other = 3 }
 -- Fallbacks when the color settings are blank (keep in sync with plugin.toml defaults).
-local DEFAULT_COLORS = { critical = "#ff5c5c", warning = "#f1c232" }
+local DEFAULT_COLORS = { critical = "#ff5c5c", warning = "#f1c232", ok = "#3fb950" }
 -- Above this many new alerts in one fetch, send a single summary notification.
 local MAX_INDIVIDUAL_NOTIFICATIONS = 3
 local DEFAULT_SILENCE_MINUTES = 120
@@ -82,6 +82,7 @@ local function publishColors()
     warning = configuredColor("warning_color", DEFAULT_COLORS.warning),
     info = "primary",
     other = "on_surface_variant",
+    ok = configuredColor("ok_color", DEFAULT_COLORS.ok),
   })
 end
 

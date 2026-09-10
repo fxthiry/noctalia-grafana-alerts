@@ -17,7 +17,7 @@ local CHIP_CHAR_WIDTH = 6.3 -- ≈ px per character at fontSize 11
 local CHIP_FIXED_WIDTH = 12 + 6 + 7 -- paddingH ×2, inner gaps, the "=" glyph
 local CENTERED = { flexGrow = 1, align = "center", justify = "center", gap = 8 }
 -- Theme roles used until the service has published its colors.
-local FALLBACK_COLORS = { critical = "error", warning = "tertiary", info = "primary", other = "on_surface_variant" }
+local FALLBACK_COLORS = { critical = "error", warning = "tertiary", info = "primary", other = "on_surface_variant", ok = "primary" }
 local SEVERITY_GLYPHS = { critical = "alert-octagon", warning = "alert-triangle", info = "info-circle", other = "bell" }
 local SEVERITIES = { "critical", "warning", "info", "other" }
 local DEFAULT_SILENCE_MINUTES = 120
@@ -412,7 +412,7 @@ local function body()
       })
     end
     return ui.column(CENTERED, {
-      ui.glyph({ name = "circle-check", size = 32, color = "primary" }),
+      ui.glyph({ name = "circle-check", size = 32, color = severityColor("ok") }),
       ui.label({ text = tr("panel.empty"), color = "on_surface_variant", textAlign = "center" }),
     })
   end

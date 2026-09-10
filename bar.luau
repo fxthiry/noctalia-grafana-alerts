@@ -2,13 +2,13 @@
 -- [[widget]] entry: glyph + firing-alert count, fed by the fetch service through
 -- shared state. Tint and (by default) glyph follow the worst severity: configured
 -- critical/warning colors published by the service as `severity_colors`, octagon /
--- triangle / bell glyphs, check mark and muted tint when all clear.
+-- triangle / bell glyphs, check mark and the ok color when all clear.
 -- Click toggles the panel, right click opens the settings — so the tree contains
 -- no inline ui.button (inline controls would eat their own clicks).
 
 local PANEL_ID = "fxthiry/grafana-alerts:panel"
 -- Theme roles used until the service has published its colors.
-local FALLBACK_COLORS = { critical = "error", warning = "tertiary" }
+local FALLBACK_COLORS = { critical = "error", warning = "tertiary", ok = "primary" }
 local DEFAULT_GLYPH = "alert-triangle"
 local SEVERITY_GLYPHS = { critical = "alert-octagon", warning = "alert-triangle", other = "bell" }
 
@@ -58,6 +58,10 @@ local function tint()
   end
   if counts == nil then
     return "on_surface_variant"
+  end
+  -- All clear: green, like the check-mark glyph, so a healthy bar reads at a glance.
+  if fetchStatus == "ok" and counts.total == 0 then
+    return severityColor("ok")
   end
   if counts.critical > 0 then
     return severityColor("critical")

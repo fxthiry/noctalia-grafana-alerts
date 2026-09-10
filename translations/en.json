@@ -92,6 +92,10 @@
       "label": "Warning color",
       "description": "Color used for warning alerts."
     },
+    "ok_color": {
+      "label": "All clear color",
+      "description": "Color used when no alert is firing (bar tint, check mark)."
+    },
     "filters": {
       "label": "Filters",
       "description": "Alertmanager matchers sent to the API, one per entry, e.g. team=infra or env!~\"staging|dev\"."

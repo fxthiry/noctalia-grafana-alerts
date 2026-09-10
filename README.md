@@ -99,6 +99,7 @@ Settings → Plugins → Grafana Alerts:
 | `hidden_labels` | `string_list` | `alertname, grafana_folder, severity` | Labels not shown as chips (`__*` labels are always hidden). |
 | `critical_color` | `color` | `#ff5c5c` | Color for critical alerts: bar tint, badges, card borders. |
 | `warning_color` | `color` | `#f1c232` | Color for warning alerts. |
+| `ok_color` | `color` | `#3fb950` | Color when nothing is firing: bar tint and check mark. |
 | `notify_new_alerts` | `bool` | `true` | Desktop notification for every new alert. |
 | `notify_min_severity` | `select` | `warning` | Minimum severity to notify (firing and resolved): `critical`, `warning`, `info` or all. |
 | `notify_resolved` | `bool` | `true` | Low-urgency notification when a known alert stops firing (not when you silence it). |
